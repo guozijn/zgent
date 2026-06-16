@@ -39,12 +39,14 @@ directory. A hosted registry can be added later without changing plugin loading.
 
 Remote workers are registry rows in the local SQLite store. Registering a worker
 records its endpoint and capabilities; dispatching marks the worker assigned and
-records an event against the task. Execution transport remains a plugin or
-gateway concern.
+records an event against the task. Worker `run-next` and `run-all` execute task
+nodes under the worker identity through the existing runtime. Remote transport
+can be layered behind worker endpoints through plugins or gateways.
 
 ```bash
 zgent workers register worker-1 --endpoint ssh://worker --capability codex
 zgent workers dispatch worker-1 <task-id>
+zgent workers run-next worker-1 <task-id> --adapter fake -- /bin/sh -c "echo ok"
 ```
 
 ## Safety And Retry

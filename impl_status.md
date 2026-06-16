@@ -107,6 +107,8 @@ Implemented CLI surface:
 - `zgent workers register`
 - `zgent workers list`
 - `zgent workers dispatch`
+- `zgent workers run-next`
+- `zgent workers run-all`
 - `zgent dashboard export`
 - `zgent dashboard serve`
 - `zgent daemon health`
@@ -293,6 +295,7 @@ Status: local-first surfaces implemented; production hardening remains
 - [x] Implement local A2A gateway.
 - [x] Add local web dashboard.
 - [x] Add remote worker registration and dispatch.
+- [x] Add worker-owned node execution.
 - [x] Add local agent marketplace integration.
 - [x] Add hosted collaboration session records.
 
@@ -365,6 +368,7 @@ Status: complete for the implemented local-first scope
 - [x] Add CLI smoke coverage for project-local persistence.
 - [x] Add CLI smoke coverage for failed-node retry.
 - [x] Add CLI smoke coverage for dashboard, workers, gateways, marketplace, and collaboration.
+- [x] Add CLI smoke coverage for worker-owned node execution.
 
 ## Implemented Vertical Slice
 

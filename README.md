@@ -54,6 +54,8 @@ cargo run -- worktrees create <task-id> --agent codex --repo .
 cargo run -- workers register worker-1 --endpoint ssh://worker --capability codex
 cargo run -- workers list
 cargo run -- workers dispatch worker-1 <task-id>
+cargo run -- workers run-next worker-1 <task-id> --adapter fake -- /bin/sh -c "echo ok"
+cargo run -- workers run-all worker-1 <task-id> --adapter fake -- /bin/sh -c "echo ok"
 cargo run -- dashboard export --out /tmp/zgent-dashboard.html
 cargo run -- dashboard serve --addr 127.0.0.1:8765
 cargo run --bin zgentd -- once <task-id> --owner zgentd --adapter fake -- /bin/sh -c "echo ok"

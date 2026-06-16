@@ -299,6 +299,20 @@ enum WorkerCommand {
         worker_id: String,
         task_id: String,
     },
+    RunNext(WorkerRunArgs),
+    RunAll(WorkerRunArgs),
+}
+
+#[derive(Debug, Args)]
+struct WorkerRunArgs {
+    worker_id: String,
+    task_id: String,
+    #[arg(long, default_value = "fake")]
+    adapter: String,
+    #[arg(long = "require-lock")]
+    required_locks: Vec<String>,
+    #[arg(last = true, required = true)]
+    command: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -890,6 +904,45 @@ fn worker(home: Home, command: WorkerCommand) -> crate::Result<()> {
             } else {
                 println!("not-found");
             }
+            Ok(())
+        }
+        WorkerCommand::RunNext(args) => {
+            if !store.dispatch_worker(&args.worker_id, &args.task_id)? {
+                println!("not-found");
+                return Ok(());
+            }
+            if let Some(node) = runtime::run_next_command(
+                &store,
+                &args.task_id,
+                &args.worker_id,
+                &args.adapter,
+                &args.command,
+                runtime::RunOptions {
+                    required_locks: args.required_locks,
+                },
+            )? {
+                println!("worker {} ran {} {}", args.worker_id, node.id, node.name);
+            } else {
+                println!("no-runnable-node");
+            }
+            Ok(())
+        }
+        WorkerCommand::RunAll(args) => {
+            if !store.dispatch_worker(&args.worker_id, &args.task_id)? {
+                println!("not-found");
+                return Ok(());
+            }
+            let count = runtime::run_all_command(
+                &store,
+                &args.task_id,
+                &args.worker_id,
+                &args.adapter,
+                &args.command,
+                runtime::RunOptions {
+                    required_locks: args.required_locks,
+                },
+            )?;
+            println!("worker {} ran {count} node(s)", args.worker_id);
             Ok(())
         }
     }

@@ -360,6 +360,27 @@ fn cli_dashboard_workers_gateways_marketplace_and_collaboration() {
         "{}",
         String::from_utf8_lossy(&dispatch.stderr)
     );
+    let worker_run = zgent(
+        &home,
+        &[
+            "workers",
+            "run-next",
+            "worker-1",
+            &task_id,
+            "--adapter",
+            "fake",
+            "--",
+            "/bin/sh",
+            "-c",
+            "echo ok",
+        ],
+    );
+    assert!(
+        worker_run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&worker_run.stderr)
+    );
+    assert!(String::from_utf8_lossy(&worker_run.stdout).contains("worker worker-1 ran"));
 
     let dashboard = temp.path().join("dashboard.html");
     let dashboard_out = dashboard.to_string_lossy().to_string();
