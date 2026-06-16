@@ -633,6 +633,7 @@ zgent agents detect
 zgent task create "fix the flaky auth test"
 zgent task status <task-id>
 zgent task events <task-id>
+zgent task retry <node-id>
 zgent run "review this repo for risky areas"
 zgent workflow run fix-ci --log ci.log
 zgent locks list

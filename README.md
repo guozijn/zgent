@@ -30,6 +30,7 @@ cargo run -- task capture-patch <task-id> --repo .
 cargo run -- task verify <task-id> -- cargo test
 cargo run -- task complete <node-id>
 cargo run -- task fail <node-id>
+cargo run -- task retry <node-id>
 cargo run -- task cancel <task-id>
 cargo run -- task status <task-id>
 cargo run -- task events <task-id>
@@ -161,6 +162,7 @@ SQLite task/event/lock/session/approval state, DAG leasing, fake subprocess
 execution, provider-style JSONL normalization, required-lock enforcement,
 workflow completion, task cancellation, event secret redaction, git patch
 capture, verification recording, file-backed workflow templates, persistent
-plugin trust, worktree isolation, daemon request handling, and the CLI
-bootstrap/task/lock/approval/skill/export/gateway path. GitHub Actions run
-formatting, clippy, tests, crate packaging, and tagged binary releases.
+plugin trust, dangerous-command approval gates, node retry, worktree isolation,
+daemon request handling, and the CLI bootstrap/task/lock/approval/skill/export/gateway
+path. GitHub Actions run formatting, clippy, tests, crate packaging, and tagged
+binary releases.

@@ -585,6 +585,56 @@ impl Store {
         Ok(true)
     }
 
+    pub fn wait_for_approval(&self, node_id: &str, reason: &str) -> crate::Result<bool> {
+        let Some(node) = self.node(node_id)? else {
+            return Ok(false);
+        };
+        let changed = self.conn.execute(
+            "
+            UPDATE task_nodes
+            SET state = 'WAITING_APPROVAL', lease_owner = NULL, leased_until = NULL
+            WHERE id = ?1 AND state = 'RUNNING'
+            ",
+            [node_id],
+        )?;
+        if changed == 0 {
+            return Ok(false);
+        }
+        self.record_event(
+            Some(&node.task_id),
+            Some(node_id),
+            "node.waiting_approval",
+            json!({ "node": node.name, "reason": reason }),
+        )?;
+        self.refresh_task_state(&node.task_id)?;
+        Ok(true)
+    }
+
+    pub fn retry_node(&self, node_id: &str) -> crate::Result<bool> {
+        let Some(node) = self.node(node_id)? else {
+            return Ok(false);
+        };
+        let changed = self.conn.execute(
+            "
+            UPDATE task_nodes
+            SET state = 'PENDING', lease_owner = NULL, leased_until = NULL
+            WHERE id = ?1 AND state IN ('FAILED', 'BLOCKED', 'WAITING_APPROVAL', 'CANCELLED')
+            ",
+            [node_id],
+        )?;
+        if changed == 0 {
+            return Ok(false);
+        }
+        self.record_event(
+            Some(&node.task_id),
+            Some(node_id),
+            "node.retried",
+            json!({ "node": node.name }),
+        )?;
+        self.refresh_task_state(&node.task_id)?;
+        Ok(true)
+    }
+
     pub fn cancel_task(&self, task_id: &str) -> crate::Result<bool> {
         if self.task(task_id)?.is_none() {
             return Ok(false);
@@ -650,6 +700,10 @@ impl Store {
             "COMPLETED"
         } else if nodes.iter().any(|node| node.state == "RUNNING") {
             "RUNNING"
+        } else if nodes.iter().any(|node| node.state == "WAITING_APPROVAL") {
+            "WAITING_APPROVAL"
+        } else if nodes.iter().any(|node| node.state == "BLOCKED") {
+            "BLOCKED"
         } else {
             "PENDING"
         };
@@ -995,7 +1049,48 @@ impl Store {
             },
             json!({ "id": approval_id, "level": approval.level }),
         )?;
+        if status == "APPROVED"
+            && let Some(node_id) = approval.node_id.as_deref()
+        {
+            let _ = self.retry_node(node_id)?;
+        }
         Ok(true)
+    }
+
+    pub fn has_approved_approval(
+        &self,
+        task_id: &str,
+        node_id: Option<&str>,
+        level: &str,
+    ) -> crate::Result<bool> {
+        let count: i64 = if let Some(node_id) = node_id {
+            self.conn.query_row(
+                "
+                SELECT count(*)
+                FROM approvals
+                WHERE status = 'APPROVED'
+                  AND level = ?1
+                  AND task_id = ?2
+                  AND (node_id = ?3 OR node_id IS NULL)
+                ",
+                params![level, task_id, node_id],
+                |row| row.get(0),
+            )?
+        } else {
+            self.conn.query_row(
+                "
+                SELECT count(*)
+                FROM approvals
+                WHERE status = 'APPROVED'
+                  AND level = ?1
+                  AND task_id = ?2
+                  AND node_id IS NULL
+                ",
+                params![level, task_id],
+                |row| row.get(0),
+            )?
+        };
+        Ok(count > 0)
     }
 
     pub fn approval(&self, approval_id: &str) -> crate::Result<Option<ApprovalRow>> {

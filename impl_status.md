@@ -83,6 +83,7 @@ Implemented CLI surface:
 - `zgent task verify`
 - `zgent task complete`
 - `zgent task fail`
+- `zgent task retry`
 - `zgent task cancel`
 - `zgent task status`
 - `zgent task events`
@@ -198,6 +199,7 @@ Status: in progress
 - [x] Implement task registration.
 - [x] Implement DAG node model.
 - [x] Implement leases and heartbeats.
+- [x] Implement retry for failed, blocked, waiting, or cancelled nodes.
 - [x] Implement resource locks.
 - [x] Implement event journal.
 - [x] Add daemon `once` scheduler entrypoint.
@@ -297,6 +299,7 @@ Status: in progress
 - [x] Define policy files under `~/.zgent/policy`.
 - [x] Implement approval levels.
 - [x] Require declared locks before write-capable provider execution.
+- [x] Require approval before locally detected dangerous shell commands execute.
 - [x] Record approvals in event journal.
 - [x] Redact secrets from event logs.
 - [x] Add project trust checks.
@@ -330,6 +333,7 @@ Status: in progress
 - [x] Unit test fake subprocess execution and transcript capture.
 - [x] Unit test provider session ID capture from JSONL output.
 - [x] Unit test required lock enforcement before node leasing.
+- [x] Unit test dangerous-command approval gating and release back to pending.
 - [x] Unit test task cancellation.
 - [x] Unit test event secret redaction.
 - [x] Unit test file-backed workflow templates with skill references.
@@ -353,6 +357,7 @@ Status: in progress
 - [x] Unit test OpenTelemetry-shaped export.
 - [x] Add workflow execution tests with fake adapters.
 - [x] Add CLI smoke coverage for project-local persistence.
+- [x] Add CLI smoke coverage for failed-node retry.
 - [x] Add CLI smoke coverage for dashboard, workers, gateways, marketplace, and collaboration.
 
 ## Recommended Next Implementation Step

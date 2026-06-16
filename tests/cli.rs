@@ -100,6 +100,42 @@ fn cli_init_task_locks_and_lists() {
         String::from_utf8_lossy(&complete.stderr)
     );
 
+    let retryable = zgent(&home, &["task", "create", "retry", "me"]);
+    assert!(
+        retryable.status.success(),
+        "{}",
+        String::from_utf8_lossy(&retryable.stderr)
+    );
+    let retryable_task_id = String::from_utf8_lossy(&retryable.stdout)
+        .trim()
+        .to_string();
+    let retryable_lease = zgent(
+        &home,
+        &["task", "lease", &retryable_task_id, "--owner", "cli-test"],
+    );
+    assert!(
+        retryable_lease.status.success(),
+        "{}",
+        String::from_utf8_lossy(&retryable_lease.stderr)
+    );
+    let retryable_node_id = String::from_utf8_lossy(&retryable_lease.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+    assert!(
+        zgent(&home, &["task", "fail", &retryable_node_id])
+            .status
+            .success()
+    );
+    let retry = zgent(&home, &["task", "retry", &retryable_node_id]);
+    assert!(
+        retry.status.success(),
+        "{}",
+        String::from_utf8_lossy(&retry.stderr)
+    );
+    assert!(String::from_utf8_lossy(&retry.stdout).contains("retrying"));
+
     let cancellable = zgent(&home, &["task", "create", "cancel", "me"]);
     assert!(
         cancellable.status.success(),

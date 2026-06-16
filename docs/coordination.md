@@ -47,6 +47,19 @@ zgent workers register worker-1 --endpoint ssh://worker --capability codex
 zgent workers dispatch worker-1 <task-id>
 ```
 
+## Safety And Retry
+
+Write-capable provider runs can require explicit locks with `--require-lock`.
+Shell commands that match the local dangerous-command policy move the leased node
+to `WAITING_APPROVAL` and create a `dangerous` approval request before execution.
+Approving that request releases the node back to `PENDING`; failed or waiting
+nodes can also be returned to the runnable queue explicitly:
+
+```bash
+zgent approvals approve <approval-id>
+zgent task retry <node-id>
+```
+
 ## Gateways
 
 `zgent gateways acp-stdio` exposes a JSON-RPC stdio bridge for local clients.

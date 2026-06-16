@@ -113,6 +113,7 @@ enum TaskCommand {
     Verify(VerifyArgs),
     Complete { node_id: String },
     Fail { node_id: String },
+    Retry { node_id: String },
     Cancel { task_id: String },
     Status { task_id: String },
     Events { task_id: String },
@@ -592,6 +593,14 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 println!("failed {node_id}");
             } else {
                 println!("not-found {node_id}");
+            }
+            Ok(())
+        }
+        TaskCommand::Retry { node_id } => {
+            if store.retry_node(&node_id)? {
+                println!("retrying {node_id}");
+            } else {
+                println!("not-retryable {node_id}");
             }
             Ok(())
         }

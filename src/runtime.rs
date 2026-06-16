@@ -42,6 +42,7 @@ pub fn run_next_command(
     let Some(node) = store.lease_next_node(task_id, owner, 300)? else {
         return Ok(None);
     };
+    ensure_command_policy(store, task_id, &node.id, &node.name, command)?;
     store.record_event(
         Some(task_id),
         Some(&node.id),
@@ -137,6 +138,41 @@ fn ensure_locks(store: &Store, owner: &str, locks: &[String]) -> crate::Result<(
         }
     }
     Ok(())
+}
+
+fn ensure_command_policy(
+    store: &Store,
+    task_id: &str,
+    node_id: &str,
+    node_name: &str,
+    command: &[String],
+) -> crate::Result<()> {
+    if !is_dangerous_command(command)
+        || store.has_approved_approval(task_id, Some(node_id), "dangerous")?
+    {
+        return Ok(());
+    }
+    let reason = format!("dangerous command requires approval before node `{node_name}` runs");
+    store.wait_for_approval(node_id, &reason)?;
+    store.request_approval(Some(task_id), Some(node_id), "dangerous", Some(&reason))?;
+    bail!("{reason}");
+}
+
+fn is_dangerous_command(command: &[String]) -> bool {
+    let text = command.join(" ").to_ascii_lowercase();
+    [
+        "rm -rf",
+        "git reset --hard",
+        "git clean -fd",
+        "git push",
+        "sudo ",
+        "chmod -r",
+        "chown -r",
+        "curl ",
+        "wget ",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
 }
 
 fn record_output_events(
@@ -282,5 +318,55 @@ mod tests {
                 .unwrap()
                 .is_some()
         );
+    }
+
+    #[test]
+    fn requires_approval_for_dangerous_commands() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = Home::from_path(temp.path().join(".zgent"));
+        let store = Store::open(home).unwrap();
+        let task_id = store
+            .create_task(
+                "dangerous",
+                "plan-only",
+                vec![NodeSpec::new("plan", "planner")],
+            )
+            .unwrap();
+        let command = vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            "echo rm -rf safe".to_string(),
+        ];
+        assert!(
+            super::run_next_command(
+                &store,
+                &task_id,
+                "tester",
+                "fake",
+                &command,
+                Default::default()
+            )
+            .is_err()
+        );
+        let node = store.nodes(&task_id).unwrap().remove(0);
+        assert_eq!(node.state, "WAITING_APPROVAL");
+        let approval = store.approvals().unwrap().remove(0);
+        assert_eq!(approval.level, "dangerous");
+
+        assert!(store.decide_approval(&approval.id, "APPROVED").unwrap());
+        assert_eq!(store.node(&node.id).unwrap().unwrap().state, "PENDING");
+        assert!(
+            super::run_next_command(
+                &store,
+                &task_id,
+                "tester",
+                "fake",
+                &command,
+                Default::default()
+            )
+            .unwrap()
+            .is_some()
+        );
+        assert_eq!(store.node(&node.id).unwrap().unwrap().state, "COMPLETED");
     }
 }
