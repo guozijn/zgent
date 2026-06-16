@@ -1,0 +1,28 @@
+pub mod adapters;
+pub mod approvals;
+pub mod cli;
+pub mod collaboration;
+pub mod config;
+pub mod daemon;
+pub mod dashboard;
+pub mod events;
+pub mod gateways;
+pub mod home;
+pub mod init;
+pub mod locks;
+pub mod marketplace;
+pub mod normalizer;
+pub mod otel;
+pub mod patches;
+pub mod plugins;
+pub mod redact;
+pub mod runtime;
+pub mod skills;
+pub mod state;
+pub mod tasks;
+pub mod verify;
+pub mod workers;
+pub mod workflows;
+pub mod worktrees;
+
+pub type Result<T> = anyhow::Result<T>;
