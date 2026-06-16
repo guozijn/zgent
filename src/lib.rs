@@ -12,6 +12,7 @@ pub mod init;
 pub mod locks;
 pub mod marketplace;
 pub mod normalizer;
+pub mod opencode_http;
 pub mod otel;
 pub mod patches;
 pub mod plugins;

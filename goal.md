@@ -630,6 +630,8 @@ zgent init
 zgent doctor
 zgent agents list
 zgent agents detect
+zgent agents opencode-serve-plan --hostname 127.0.0.1 --port 4096
+zgent agents opencode-openapi --url http://127.0.0.1:4096
 zgent task create "fix the flaky auth test"
 zgent task status <task-id>
 zgent task events <task-id>

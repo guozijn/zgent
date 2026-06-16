@@ -17,6 +17,8 @@ cargo run -- --project init
 cargo run -- doctor
 cargo run -- agents detect
 cargo run -- agents list
+cargo run -- agents opencode-serve-plan --hostname 127.0.0.1 --port 4096
+cargo run -- agents opencode-openapi --url http://127.0.0.1:4096
 cargo run -- task create "fix the flaky auth test"
 cargo run -- task lease <task-id> --owner codex
 cargo run -- task heartbeat <node-id> --owner codex
@@ -124,6 +126,17 @@ name = "review"
 role = "reviewer"
 depends_on = ["plan"]
 skill = "code-review"
+```
+
+## opencode HTTP
+
+`opencode serve` exposes a local HTTP server with an OpenAPI document at `/doc`.
+`zgent` can print the server command plan or fetch that document from a running
+server:
+
+```bash
+cargo run -- agents opencode-serve-plan --hostname 127.0.0.1 --port 4096
+cargo run -- agents opencode-openapi --url http://127.0.0.1:4096
 ```
 
 ## Plugins

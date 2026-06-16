@@ -73,6 +73,13 @@ session listing/cancellation mapped onto tasks.
 
 Incoming A2A `message/send` requests become ordinary durable `zgent` tasks.
 
+## opencode HTTP
+
+opencode can run as a headless HTTP server and publishes its OpenAPI 3.1
+document at `/doc`. `zgent agents opencode-serve-plan` prints the command to
+start that server; `zgent agents opencode-openapi` fetches the OpenAPI document
+from a running server for SDK generation or inspection.
+
 ## Collaboration
 
 Hosted collaboration is represented as local session records first:

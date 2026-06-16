@@ -6,8 +6,8 @@ use serde_json::json;
 
 use crate::{
     adapters, approvals, collaboration, daemon, dashboard, gateways, home::Home, init, locks,
-    marketplace, otel, patches, plugins, runtime, skills, state::Store, tasks, verify, workers,
-    workflows, worktrees,
+    marketplace, opencode_http, otel, patches, plugins, runtime, skills, state::Store, tasks,
+    verify, workers, workflows, worktrees,
 };
 
 #[derive(Debug, Parser)]
@@ -96,6 +96,16 @@ enum Commands {
 enum AgentCommand {
     Detect,
     List,
+    OpencodeServePlan {
+        #[arg(long, default_value = "127.0.0.1")]
+        hostname: String,
+        #[arg(long, default_value_t = 4096)]
+        port: u16,
+    },
+    OpencodeOpenapi {
+        #[arg(long, default_value = "http://127.0.0.1:4096")]
+        url: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -435,6 +445,19 @@ fn agents(home: Home, command: AgentCommand) -> crate::Result<()> {
             home.require_initialized()?;
             let store = Store::open(home)?;
             print_adapters(&store.list_adapters()?);
+            Ok(())
+        }
+        AgentCommand::OpencodeServePlan { hostname, port } => {
+            let plan = opencode_http::serve_plan(&hostname, port);
+            println!("{} {}", plan.program, plan.args.join(" "));
+            println!(
+                "openapi: {}",
+                opencode_http::openapi_url(&format!("http://{hostname}:{port}"))
+            );
+            Ok(())
+        }
+        AgentCommand::OpencodeOpenapi { url } => {
+            print!("{}", opencode_http::fetch_openapi(&url)?);
             Ok(())
         }
     }

@@ -70,6 +70,8 @@ Implemented CLI surface:
 - `zgent doctor`
 - `zgent agents detect`
 - `zgent agents list`
+- `zgent agents opencode-serve-plan`
+- `zgent agents opencode-openapi`
 - `zgent task create`
 - `zgent task lease`
 - `zgent task heartbeat`
@@ -217,6 +219,8 @@ Status: in progress
 - [x] Implement explicit Codex adapter command execution path.
 - [x] Implement explicit Claude Code adapter command execution path.
 - [x] Implement explicit opencode adapter command execution path.
+- [x] Add opencode HTTP server command planning.
+- [x] Add opencode OpenAPI document fetch from a running local server.
 - [x] Implement explicit Cursor Agent adapter command execution path.
 - [x] Normalize fake subprocess run events.
 - [x] Normalize provider-style JSONL/text subprocess output.
@@ -326,6 +330,7 @@ Status: in progress
 - [x] Unit test adapter specs.
 - [x] Unit test adapter command plans.
 - [x] Unit test adapter resume command plans.
+- [x] Unit test opencode HTTP server plan and OpenAPI URL parsing.
 - [x] Unit test provider-style JSONL normalization.
 - [x] Unit test home initialization.
 - [x] Unit test task, event, and lock state.
@@ -341,6 +346,7 @@ Status: in progress
 - [x] Unit test approval decisions.
 - [x] Unit test agent session lifecycle.
 - [x] Integration test CLI init, adapter list, task lifecycle, locks, and skills.
+- [x] Integration test opencode HTTP server command planning.
 - [x] Add provider-runtime tests with fake subprocesses.
 - [x] Add plugin trust tests.
 - [x] Unit test plugin capability parsing.

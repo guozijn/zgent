@@ -55,6 +55,23 @@ fn cli_init_task_locks_and_lists() {
         String::from_utf8_lossy(&agents.stderr)
     );
     assert!(String::from_utf8_lossy(&agents.stdout).contains("codex"));
+    let opencode_plan = zgent(
+        &home,
+        &[
+            "agents",
+            "opencode-serve-plan",
+            "--hostname",
+            "127.0.0.1",
+            "--port",
+            "4096",
+        ],
+    );
+    assert!(
+        opencode_plan.status.success(),
+        "{}",
+        String::from_utf8_lossy(&opencode_plan.stderr)
+    );
+    assert!(String::from_utf8_lossy(&opencode_plan.stdout).contains("opencode serve"));
 
     let created = zgent(&home, &["task", "create", "fix", "the", "test"]);
     assert!(
