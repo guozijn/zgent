@@ -188,7 +188,7 @@ Remaining documentation work should be tied to implementation changes, not treat
 
 ### Core Runtime
 
-Status: in progress
+Status: complete for the local-first implementation
 
 - [x] Choose implementation language: Rust.
 - [x] Choose crate/package structure.
@@ -210,7 +210,7 @@ Status: in progress
 
 ### Agent Adapters
 
-Status: in progress
+Status: complete for built-in local subprocess and opencode HTTP planning paths
 
 - [x] Define adapter trait/interface.
 - [x] Implement adapter detection.
@@ -231,7 +231,7 @@ Status: in progress
 
 ### Workflows
 
-Status: in progress
+Status: complete for built-in and file-backed DAG workflows
 
 - [x] Define built-in workflow templates in code.
 - [x] Implement plan-only workflow DAG template.
@@ -246,7 +246,7 @@ Status: in progress
 
 ### Skills
 
-Status: in progress
+Status: complete for default, user, and project skills
 
 - [x] Define `skill.toml`.
 - [x] Load skills from `~/.zgent/skills`.
@@ -260,7 +260,7 @@ Status: in progress
 
 ### Plugins
 
-Status: in progress
+Status: complete for local plugin loading, trust, hooks, and marketplace install
 
 - [x] Define basic `zgent.plugin.json` manifest loader.
 - [x] Load user plugins from `~/.zgent/plugins/installed`.
@@ -298,7 +298,7 @@ Status: local-first surfaces implemented; production hardening remains
 
 ### Safety And Policy
 
-Status: in progress
+Status: complete for local locks, approvals, secret redaction, and plugin trust
 
 - [x] Define policy files under `~/.zgent/policy`.
 - [x] Implement approval levels.
@@ -310,7 +310,7 @@ Status: in progress
 
 ### Observability
 
-Status: in progress
+Status: complete for SQLite, JSONL, artifacts, sessions, cost events, and OpenTelemetry-shaped export
 
 - [x] Record task and lock events.
 - [x] Record fake subprocess run events.
@@ -325,7 +325,7 @@ Status: in progress
 
 ### Tests
 
-Status: in progress
+Status: complete for the implemented local-first scope
 
 - [x] Unit test adapter specs.
 - [x] Unit test adapter command plans.
@@ -366,9 +366,9 @@ Status: in progress
 - [x] Add CLI smoke coverage for failed-node retry.
 - [x] Add CLI smoke coverage for dashboard, workers, gateways, marketplace, and collaboration.
 
-## Recommended Next Implementation Step
+## Implemented Vertical Slice
 
-The smallest useful vertical slice is now implemented:
+The local-first vertical slice is implemented:
 
 ```text
 zgent init
@@ -380,22 +380,11 @@ zgent init
   -> prints readiness report
 ```
 
-Next implementation step:
-
-```text
-real provider execution behind explicit commands
-  -> Codex/Claude/opencode subprocess runners
-  -> provider event-stream normalizers
-  -> provider session ID capture
-  -> lock enforcement before write-capable runs
-  -> fake subprocess regression tests remain the default gate
-```
-
-Real provider runs should stay opt-in so tests and bootstrap never spend credits.
+Provider runs are opt-in so tests and bootstrap never spend credits. Fake
+subprocess tests remain the default regression gate.
 
 ## Open Technical Questions
 
-- Should the first IPC be Unix Domain Socket JSONL, HTTP, or both?
 - Should worktree isolation be mandatory for all write-capable workflows?
 - Should `zgent-core` be purely deterministic code, or eventually backed by a preferred default LLM?
 
