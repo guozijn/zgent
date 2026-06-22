@@ -73,7 +73,7 @@ jobs:
           mkdir -p "$staging"
           cp "target/${{ matrix.target }}/release/zgent" "$staging/"
           cp "target/${{ matrix.target }}/release/zgentd" "$staging/"
-          cp README.md goal.md impl_status.md "$staging/"
+          cp README.md "$staging/"
           tar -czf "dist/$archive" -C dist "${{ matrix.archive_name }}"
           shasum -a 256 "dist/$archive" > "dist/$archive.sha256"
 

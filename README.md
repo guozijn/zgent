@@ -126,7 +126,6 @@ Run `zgent --help` or `zgent <command> --help` for the full command tree. Main a
 ## Documentation
 
 - [docs/coordination.md](docs/coordination.md) — persistence, plugins, gateways, workers, and collaboration model
-- [goal.md](goal.md) — project goals and design direction
 
 ## Development
 
