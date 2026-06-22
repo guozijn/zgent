@@ -533,7 +533,6 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )? {
                 println!("ran {} {}", node.id, node.name);
@@ -552,7 +551,6 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )?;
             println!("ran {count} node(s)");
@@ -569,7 +567,6 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )? {
                 println!("ran {} {}", node.id, node.name);
@@ -589,7 +586,6 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )?;
             println!("ran {count} node(s)");
@@ -606,7 +602,6 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )? {
                 println!("resumed {} {}", node.id, node.name);
@@ -626,7 +621,6 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )?;
             println!("resumed {count} node(s)");
@@ -955,7 +949,6 @@ fn worker(home: Home, command: WorkerCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )? {
                 println!("worker {} ran {} {}", args.worker_id, node.id, node.name);
@@ -978,7 +971,6 @@ fn worker(home: Home, command: WorkerCommand) -> crate::Result<()> {
                 runtime::RunOptions {
                     required_locks: args.required_locks,
                     permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
-                    ..Default::default()
                 },
             )?;
             println!("worker {} ran {count} node(s)", args.worker_id);

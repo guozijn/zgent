@@ -6,17 +6,12 @@ use crate::state::ApprovalRow;
 pub const LEVELS: &[&str] = &["read-only", "workspace-write", "trusted-write", "dangerous"];
 pub const PERMISSION_MODES: &[&str] = &["review-first", "yolo"];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PermissionMode {
+    #[default]
     ReviewFirst,
     Yolo,
-}
-
-impl Default for PermissionMode {
-    fn default() -> Self {
-        Self::ReviewFirst
-    }
 }
 
 impl PermissionMode {
