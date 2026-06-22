@@ -1,7 +1,10 @@
 # zgent Coordination Model
 
-`zgent` owns persistence and runtime state directly. There is no external state
-daemon requirement. The extension boundary is intentionally narrow:
+`zgent` owns persistence and runtime state locally. The interactive entrypoint
+uses a managed local daemon as the live coordinator for sessions, locks,
+background provider runs, and multi-client status. State remains SQLite plus
+JSONL on disk, so the daemon is a runtime coordinator rather than an external
+database requirement. The extension boundary is intentionally narrow:
 
 - provider adapters for Codex, Claude Code, Cursor Agent, opencode, and future CLIs
 - plugins for installable capability bundles
@@ -24,6 +27,25 @@ Runtime state is SQLite plus JSONL event logs. Project runtime directories such
 as `.zgent/state`, `.zgent/tasks`, `.zgent/worktrees`, `.zgent/logs`, and
 `.zgent/collaboration` are ignored by default. Declarative project assets such
 as workflows, skills, policy, and plugins can be committed deliberately.
+
+## Adapter Registration
+
+Adapters are the provider backend abstraction. Built-in adapters are detected
+during initialization and written as static TOML manifests under
+`.zgent/adapters/*.toml`. Custom providers can be registered by adding another
+manifest with command templates for start and resume.
+
+```toml
+id = "cursor"
+kind = "provider"
+command = "cursor-agent"
+start_args = ["-p", "{prompt}", "--output-format", "stream-json"]
+resume_args = ["--print", "--output-format", "stream-json", "--resume", "{session_id}", "{prompt}"]
+output = "cursor-agent -p --output-format stream-json"
+capabilities = ["detect", "start", "resume", "stream", "collect_result"]
+permission_modes = ["review-first", "yolo"]
+trusted = true
+```
 
 ## Plugins And Skills
 
@@ -60,6 +82,13 @@ nodes can also be returned to the runnable queue explicitly:
 ```bash
 zgent approvals approve <approval-id>
 zgent task retry <node-id>
+```
+
+`review-first` is the default permission mode. `yolo` is an explicit opt-in mode
+for a run/session that bypasses local lock and dangerous-command approval gates:
+
+```bash
+zgent task run-next <task-id> --permission-mode yolo -- /bin/sh -c "echo ok"
 ```
 
 ## Gateways

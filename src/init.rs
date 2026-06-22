@@ -18,6 +18,7 @@ pub fn run(home: Home) -> crate::Result<()> {
     )?;
     for adapter in &detected {
         store.upsert_adapter(adapter)?;
+        adapters::write_manifest(&home, adapter)?;
         if adapter.installed {
             write_provider_profile(&home, &store, adapter)?;
         }

@@ -47,6 +47,15 @@ fn cli_init_task_locks_and_lists() {
     );
     assert!(home.join("config.toml").exists());
     assert!(home.join("state/zgent.sqlite").exists());
+    assert!(home.join("adapters/codex.toml").exists());
+
+    let tui = zgent(&home, &[]);
+    assert!(
+        tui.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tui.stderr)
+    );
+    assert!(String::from_utf8_lossy(&tui.stdout).contains("zgent TUI requires"));
 
     let agents = zgent(&home, &["agents", "list"]);
     assert!(

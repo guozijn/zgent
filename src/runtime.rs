@@ -3,11 +3,12 @@ use std::{fs, process::Command};
 use anyhow::bail;
 use serde_json::json;
 
-use crate::{normalizer, state::NodeRow, state::Store};
+use crate::{approvals::PermissionMode, normalizer, state::NodeRow, state::Store};
 
 #[derive(Debug, Clone, Default)]
 pub struct RunOptions {
     pub required_locks: Vec<String>,
+    pub permission_mode: PermissionMode,
 }
 
 pub fn run_next_subprocess(
@@ -38,16 +39,33 @@ pub fn run_next_command(
     if command.is_empty() {
         bail!("command is required");
     }
-    ensure_locks(store, owner, &options.required_locks)?;
+    ensure_locks(
+        store,
+        owner,
+        &options.required_locks,
+        options.permission_mode,
+    )?;
     let Some(node) = store.lease_next_node(task_id, owner, 300)? else {
         return Ok(None);
     };
-    ensure_command_policy(store, task_id, &node.id, &node.name, command)?;
+    ensure_command_policy(
+        store,
+        task_id,
+        &node.id,
+        &node.name,
+        command,
+        options.permission_mode,
+    )?;
     store.record_event(
         Some(task_id),
         Some(&node.id),
         "run.started",
-        json!({ "adapter": adapter, "program": command[0], "args": &command[1..] }),
+        json!({
+            "adapter": adapter,
+            "program": command[0],
+            "args": &command[1..],
+            "permission_mode": options.permission_mode.as_str()
+        }),
     )?;
     let session_id = store.create_session(adapter, Some(task_id), Some(&node.id), None)?;
 
@@ -131,7 +149,15 @@ pub fn run_all_command(
     Ok(count)
 }
 
-fn ensure_locks(store: &Store, owner: &str, locks: &[String]) -> crate::Result<()> {
+fn ensure_locks(
+    store: &Store,
+    owner: &str,
+    locks: &[String],
+    permission_mode: PermissionMode,
+) -> crate::Result<()> {
+    if permission_mode.bypasses_approval() {
+        return Ok(());
+    }
     for resource in locks {
         if !store.lock_held(resource, owner)? {
             bail!("required lock `{resource}` is not held by `{owner}`");
@@ -146,7 +172,17 @@ fn ensure_command_policy(
     node_id: &str,
     node_name: &str,
     command: &[String],
+    permission_mode: PermissionMode,
 ) -> crate::Result<()> {
+    if permission_mode.bypasses_approval() {
+        store.record_event(
+            Some(task_id),
+            Some(node_id),
+            "permission.yolo",
+            json!({ "node": node_name, "reason": "approval checks bypassed" }),
+        )?;
+        return Ok(());
+    }
     if !is_dangerous_command(command)
         || store.has_approved_approval(task_id, Some(node_id), "dangerous")?
     {
@@ -295,6 +331,7 @@ mod tests {
         ];
         let options = super::RunOptions {
             required_locks: vec!["repo:test".to_string()],
+            ..Default::default()
         };
         assert!(
             super::run_next_command(
@@ -368,5 +405,35 @@ mod tests {
             .is_some()
         );
         assert_eq!(store.node(&node.id).unwrap().unwrap().state, "COMPLETED");
+    }
+
+    #[test]
+    fn yolo_bypasses_lock_and_dangerous_command_approval() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = Home::from_path(temp.path().join(".zgent"));
+        let store = Store::open(home).unwrap();
+        let task_id = store
+            .create_task("yolo", "plan-only", vec![NodeSpec::new("plan", "planner")])
+            .unwrap();
+        let command = vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            "echo rm -rf safe".to_string(),
+        ];
+        let node = super::run_next_command(
+            &store,
+            &task_id,
+            "tester",
+            "fake",
+            &command,
+            super::RunOptions {
+                required_locks: vec!["repo:test".to_string()],
+                permission_mode: crate::approvals::PermissionMode::Yolo,
+            },
+        )
+        .unwrap()
+        .expect("node");
+        assert_eq!(store.node(&node.id).unwrap().unwrap().state, "COMPLETED");
+        assert!(store.approvals().unwrap().is_empty());
     }
 }

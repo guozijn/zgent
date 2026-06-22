@@ -6,7 +6,7 @@ use serde_json::json;
 
 use crate::{
     adapters, approvals, collaboration, daemon, dashboard, gateways, home::Home, init, locks,
-    marketplace, opencode_http, otel, patches, plugins, runtime, skills, state::Store, tasks,
+    marketplace, opencode_http, otel, patches, plugins, runtime, skills, state::Store, tasks, tui,
     verify, workers, workflows, worktrees,
 };
 
@@ -22,7 +22,7 @@ struct Cli {
     #[arg(long, global = true)]
     project: bool,
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -152,6 +152,8 @@ struct RunNextArgs {
     owner: String,
     #[arg(long, default_value = "fake")]
     adapter: String,
+    #[arg(long, default_value = "review-first")]
+    permission_mode: String,
     #[arg(long = "require-lock")]
     required_locks: Vec<String>,
     #[arg(last = true, required = true)]
@@ -165,6 +167,8 @@ struct ProviderRunArgs {
     adapter: String,
     #[arg(long, default_value = "zgent-core")]
     owner: String,
+    #[arg(long, default_value = "review-first")]
+    permission_mode: String,
     #[arg(long = "require-lock")]
     required_locks: Vec<String>,
     prompt: Vec<String>,
@@ -179,6 +183,8 @@ struct ProviderResumeArgs {
     session_id: String,
     #[arg(long, default_value = "zgent-core")]
     owner: String,
+    #[arg(long, default_value = "review-first")]
+    permission_mode: String,
     #[arg(long = "require-lock")]
     required_locks: Vec<String>,
     prompt: Vec<String>,
@@ -309,6 +315,8 @@ struct WorkerRunArgs {
     task_id: String,
     #[arg(long, default_value = "fake")]
     adapter: String,
+    #[arg(long, default_value = "review-first")]
+    permission_mode: String,
     #[arg(long = "require-lock")]
     required_locks: Vec<String>,
     #[arg(last = true, required = true)]
@@ -329,7 +337,15 @@ enum DashboardCommand {
 
 #[derive(Debug, Subcommand)]
 enum DaemonClientCommand {
+    Serve {
+        #[arg(long)]
+        socket: Option<PathBuf>,
+    },
     Health {
+        #[arg(long)]
+        socket: Option<PathBuf>,
+    },
+    Adapters {
         #[arg(long)]
         socket: Option<PathBuf>,
     },
@@ -394,24 +410,25 @@ pub fn run() -> crate::Result<()> {
     let cli = Cli::parse();
     let home = Home::resolve(cli.home, cli.project)?;
     match cli.command {
-        Commands::Init => init::run(home),
-        Commands::Doctor => doctor(home),
-        Commands::Agents { command } => agents(home, command),
-        Commands::Task { command } => task(home, command),
-        Commands::Run(args) => run_task(home, args),
-        Commands::Workflow { command } => workflow(home, command),
-        Commands::Locks { command } => lock(home, command),
-        Commands::Approvals { command } => approval(home, command),
-        Commands::Plugins { command } => plugin(home, command),
-        Commands::Skills { command } => skill(home, command),
-        Commands::Worktrees { command } => worktree(home, command),
-        Commands::Workers { command } => worker(home, command),
-        Commands::Dashboard { command } => dashboard_cmd(home, command),
-        Commands::Daemon { command } => daemon_client(home, command),
-        Commands::Export { command } => export(home, command),
-        Commands::Gateways { command } => gateway(home, command),
-        Commands::Marketplace { command } => marketplace_cmd(home, command),
-        Commands::Collaboration { command } => collaboration_cmd(home, command),
+        None => tui::run(home),
+        Some(Commands::Init) => init::run(home),
+        Some(Commands::Doctor) => doctor(home),
+        Some(Commands::Agents { command }) => agents(home, command),
+        Some(Commands::Task { command }) => task(home, command),
+        Some(Commands::Run(args)) => run_task(home, args),
+        Some(Commands::Workflow { command }) => workflow(home, command),
+        Some(Commands::Locks { command }) => lock(home, command),
+        Some(Commands::Approvals { command }) => approval(home, command),
+        Some(Commands::Plugins { command }) => plugin(home, command),
+        Some(Commands::Skills { command }) => skill(home, command),
+        Some(Commands::Worktrees { command }) => worktree(home, command),
+        Some(Commands::Workers { command }) => worker(home, command),
+        Some(Commands::Dashboard { command }) => dashboard_cmd(home, command),
+        Some(Commands::Daemon { command }) => daemon_client(home, command),
+        Some(Commands::Export { command }) => export(home, command),
+        Some(Commands::Gateways { command }) => gateway(home, command),
+        Some(Commands::Marketplace { command }) => marketplace_cmd(home, command),
+        Some(Commands::Collaboration { command }) => collaboration_cmd(home, command),
     }
 }
 
@@ -451,14 +468,14 @@ fn agents(home: Home, command: AgentCommand) -> crate::Result<()> {
             )?;
             for adapter in &detected {
                 store.upsert_adapter(adapter)?;
+                adapters::write_manifest(&home, adapter)?;
             }
             print_adapters(&detected);
             Ok(())
         }
         AgentCommand::List => {
             home.require_initialized()?;
-            let store = Store::open(home)?;
-            print_adapters(&store.list_adapters()?);
+            print_adapters(&adapters::registered_infos(&home)?);
             Ok(())
         }
         AgentCommand::OpencodeServePlan { hostname, port } => {
@@ -515,6 +532,8 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 &args.command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )? {
                 println!("ran {} {}", node.id, node.name);
@@ -532,13 +551,15 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 &args.command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )?;
             println!("ran {count} node(s)");
             Ok(())
         }
         TaskCommand::RunProviderNext(args) => {
-            let command = provider_command(&store, &args)?;
+            let command = provider_command(&home, &store, &args)?;
             if let Some(node) = runtime::run_next_command(
                 &store,
                 &args.task_id,
@@ -547,6 +568,8 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 &command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )? {
                 println!("ran {} {}", node.id, node.name);
@@ -556,7 +579,7 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
             Ok(())
         }
         TaskCommand::RunProviderAll(args) => {
-            let command = provider_command(&store, &args)?;
+            let command = provider_command(&home, &store, &args)?;
             let count = runtime::run_all_command(
                 &store,
                 &args.task_id,
@@ -565,13 +588,15 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 &command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )?;
             println!("ran {count} node(s)");
             Ok(())
         }
         TaskCommand::ResumeProviderNext(args) => {
-            let command = provider_resume_command(&store, &args)?;
+            let command = provider_resume_command(&home, &store, &args)?;
             if let Some(node) = runtime::run_next_command(
                 &store,
                 &args.task_id,
@@ -580,6 +605,8 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 &command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )? {
                 println!("resumed {} {}", node.id, node.name);
@@ -589,7 +616,7 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
             Ok(())
         }
         TaskCommand::ResumeProviderAll(args) => {
-            let command = provider_resume_command(&store, &args)?;
+            let command = provider_resume_command(&home, &store, &args)?;
             let count = runtime::run_all_command(
                 &store,
                 &args.task_id,
@@ -598,6 +625,8 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
                 &command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )?;
             println!("resumed {count} node(s)");
@@ -654,7 +683,11 @@ fn task(home: Home, command: TaskCommand) -> crate::Result<()> {
     }
 }
 
-fn provider_command(store: &Store, args: &ProviderRunArgs) -> crate::Result<Vec<String>> {
+fn provider_command(
+    home: &Home,
+    store: &Store,
+    args: &ProviderRunArgs,
+) -> crate::Result<Vec<String>> {
     let prompt = if args.prompt.is_empty() {
         store
             .task(&args.task_id)?
@@ -663,15 +696,18 @@ fn provider_command(store: &Store, args: &ProviderRunArgs) -> crate::Result<Vec<
     } else {
         args.prompt.join(" ")
     };
-    let adapter = adapters::builtin_adapter(&args.adapter)
-        .ok_or_else(|| anyhow::anyhow!("unknown adapter: {}", args.adapter))?;
-    let plan = adapters::AgentAdapter::start(&adapter, &prompt);
-    let mut command = vec![plan.program];
-    command.extend(plan.args);
-    Ok(command)
+    Ok(adapters::command_from_plan(adapters::plan_start(
+        home,
+        &args.adapter,
+        &prompt,
+    )?))
 }
 
-fn provider_resume_command(store: &Store, args: &ProviderResumeArgs) -> crate::Result<Vec<String>> {
+fn provider_resume_command(
+    home: &Home,
+    store: &Store,
+    args: &ProviderResumeArgs,
+) -> crate::Result<Vec<String>> {
     let prompt = if args.prompt.is_empty() {
         store
             .task(&args.task_id)?
@@ -680,13 +716,12 @@ fn provider_resume_command(store: &Store, args: &ProviderResumeArgs) -> crate::R
     } else {
         args.prompt.join(" ")
     };
-    let adapter = adapters::builtin_adapter(&args.adapter)
-        .ok_or_else(|| anyhow::anyhow!("unknown adapter: {}", args.adapter))?;
-    let plan = adapters::AgentAdapter::resume(&adapter, &args.session_id, &prompt)
-        .ok_or_else(|| anyhow::anyhow!("adapter does not support resume: {}", args.adapter))?;
-    let mut command = vec![plan.program];
-    command.extend(plan.args);
-    Ok(command)
+    Ok(adapters::command_from_plan(adapters::plan_resume(
+        home,
+        &args.adapter,
+        &args.session_id,
+        &prompt,
+    )?))
 }
 
 fn run_task(home: Home, args: RunArgs) -> crate::Result<()> {
@@ -919,6 +954,8 @@ fn worker(home: Home, command: WorkerCommand) -> crate::Result<()> {
                 &args.command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )? {
                 println!("worker {} ran {} {}", args.worker_id, node.id, node.name);
@@ -940,6 +977,8 @@ fn worker(home: Home, command: WorkerCommand) -> crate::Result<()> {
                 &args.command,
                 runtime::RunOptions {
                     required_locks: args.required_locks,
+                    permission_mode: approvals::parse_permission_mode(Some(&args.permission_mode))?,
+                    ..Default::default()
                 },
             )?;
             println!("worker {} ran {count} node(s)", args.worker_id);
@@ -962,10 +1001,18 @@ fn dashboard_cmd(home: Home, command: DashboardCommand) -> crate::Result<()> {
 }
 
 fn daemon_client(home: Home, command: DaemonClientCommand) -> crate::Result<()> {
+    if let DaemonClientCommand::Serve { socket } = command {
+        return daemon::serve(home, socket);
+    }
     let (socket, request) = match command {
+        DaemonClientCommand::Serve { .. } => unreachable!(),
         DaemonClientCommand::Health { socket } => (
             daemon::socket_path(&home, socket),
             json!({ "command": "health" }),
+        ),
+        DaemonClientCommand::Adapters { socket } => (
+            daemon::socket_path(&home, socket),
+            json!({ "command": "adapters" }),
         ),
         DaemonClientCommand::TaskStatus { task_id, socket } => (
             daemon::socket_path(&home, socket),

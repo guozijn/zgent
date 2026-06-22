@@ -21,6 +21,7 @@ pub mod runtime;
 pub mod skills;
 pub mod state;
 pub mod tasks;
+pub mod tui;
 pub mod verify;
 pub mod workers;
 pub mod workflows;

@@ -9,7 +9,7 @@ use clap::{Args, Parser, Subcommand};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::{home::Home, runtime, state::Store};
+use crate::{adapters, approvals, home::Home, runtime, state::Store, workflows};
 
 pub fn socket_path(home: &Home, socket: Option<PathBuf>) -> PathBuf {
     socket.unwrap_or_else(|| home.root().join("zgentd.sock"))
@@ -61,6 +61,10 @@ struct OnceArgs {
 struct IpcRequest {
     command: String,
     task_id: Option<String>,
+    adapter: Option<String>,
+    prompt: Option<String>,
+    owner: Option<String>,
+    permission_mode: Option<String>,
 }
 
 pub fn run() -> crate::Result<()> {
@@ -87,6 +91,7 @@ fn once(home: Home, args: OnceArgs) -> crate::Result<()> {
         &args.command,
         runtime::RunOptions {
             required_locks: args.required_locks,
+            ..Default::default()
         },
     )? {
         println!("ran {} {}", node.id, node.name);
@@ -96,7 +101,7 @@ fn once(home: Home, args: OnceArgs) -> crate::Result<()> {
     Ok(())
 }
 
-fn serve(home: Home, socket: Option<PathBuf>) -> crate::Result<()> {
+pub fn serve(home: Home, socket: Option<PathBuf>) -> crate::Result<()> {
     home.require_initialized()?;
     let socket = socket_path(&home, socket);
     if socket.exists() {
@@ -105,12 +110,12 @@ fn serve(home: Home, socket: Option<PathBuf>) -> crate::Result<()> {
     let listener = UnixListener::bind(&socket)?;
     println!("zgentd listening on {}", socket.display());
     for stream in listener.incoming() {
-        handle_stream(&Store::open(home.clone())?, stream?)?;
+        handle_stream(&home, &Store::open(home.clone())?, stream?)?;
     }
     Ok(())
 }
 
-fn handle_stream(store: &Store, stream: UnixStream) -> crate::Result<()> {
+fn handle_stream(home: &Home, store: &Store, stream: UnixStream) -> crate::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
     let mut writer = stream;
     for line in reader.lines() {
@@ -119,7 +124,7 @@ fn handle_stream(store: &Store, stream: UnixStream) -> crate::Result<()> {
             continue;
         }
         let response = match serde_json::from_str::<IpcRequest>(&line) {
-            Ok(request) => handle_request(store, request),
+            Ok(request) => handle_request(home, store, request),
             Err(error) => json!({ "ok": false, "error": error.to_string() }),
         };
         serde_json::to_writer(&mut writer, &response)?;
@@ -128,9 +133,17 @@ fn handle_stream(store: &Store, stream: UnixStream) -> crate::Result<()> {
     Ok(())
 }
 
-fn handle_request(store: &Store, request: IpcRequest) -> Value {
+fn handle_request(home: &Home, store: &Store, request: IpcRequest) -> Value {
     match request.command.as_str() {
         "health" => json!({ "ok": true, "service": "zgentd" }),
+        "adapters" => match adapters::registered_infos(home) {
+            Ok(adapters) => json!({ "ok": true, "adapters": adapters }),
+            Err(error) => json!({ "ok": false, "error": error.to_string() }),
+        },
+        "tasks" => match store.tasks() {
+            Ok(tasks) => json!({ "ok": true, "tasks": tasks }),
+            Err(error) => json!({ "ok": false, "error": error.to_string() }),
+        },
         "task_status" => match request
             .task_id
             .as_deref()
@@ -143,8 +156,47 @@ fn handle_request(store: &Store, request: IpcRequest) -> Value {
             Ok(locks) => json!({ "ok": true, "locks": locks }),
             Err(error) => json!({ "ok": false, "error": error.to_string() }),
         },
+        "submit_prompt" => match submit_prompt(home, store, request) {
+            Ok(task_id) => json!({ "ok": true, "task_id": task_id }),
+            Err(error) => json!({ "ok": false, "error": error.to_string() }),
+        },
         other => json!({ "ok": false, "error": format!("unknown command: {other}") }),
     }
+}
+
+fn submit_prompt(home: &Home, store: &Store, request: IpcRequest) -> crate::Result<String> {
+    let adapter = request.adapter.as_deref().unwrap_or("cursor");
+    let prompt = request
+        .prompt
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("prompt is required"))?;
+    let owner = request.owner.as_deref().unwrap_or("zgent-daemon");
+    let permission_mode = approvals::parse_permission_mode(request.permission_mode.as_deref())?;
+    let task_id = store.create_task(
+        prompt,
+        "plan-only",
+        workflows::nodes_for_home(home, "plan-only")?,
+    )?;
+    store.record_event(
+        Some(&task_id),
+        None,
+        "user.message",
+        json!({ "text": prompt, "adapter": adapter, "permission_mode": permission_mode.as_str() }),
+    )?;
+    let plan = adapters::plan_start(home, adapter, prompt)?;
+    let command = adapters::command_from_plan(plan);
+    runtime::run_next_command(
+        store,
+        &task_id,
+        owner,
+        adapter,
+        &command,
+        runtime::RunOptions {
+            permission_mode,
+            ..Default::default()
+        },
+    )?;
+    Ok(task_id)
 }
 
 #[cfg(test)]
@@ -164,21 +216,52 @@ mod tests {
             )
             .unwrap();
         let health = super::handle_request(
+            store.home(),
             &store,
             super::IpcRequest {
                 command: "health".to_string(),
                 task_id: None,
+                adapter: None,
+                prompt: None,
+                owner: None,
+                permission_mode: None,
             },
         );
         assert_eq!(health["ok"], true);
         let status = super::handle_request(
+            store.home(),
             &store,
             super::IpcRequest {
                 command: "task_status".to_string(),
                 task_id: Some(task_id),
+                adapter: None,
+                prompt: None,
+                owner: None,
+                permission_mode: None,
             },
         );
         assert_eq!(status["ok"], true);
         assert_eq!(status["task"]["status"], "PENDING");
+    }
+
+    #[test]
+    fn handles_adapter_listing() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = Home::from_path(temp.path().join(".zgent"));
+        let store = Store::open(home.clone()).unwrap();
+        let adapters = super::handle_request(
+            &home,
+            &store,
+            super::IpcRequest {
+                command: "adapters".to_string(),
+                task_id: None,
+                adapter: None,
+                prompt: None,
+                owner: None,
+                permission_mode: None,
+            },
+        );
+        assert_eq!(adapters["ok"], true);
+        assert!(adapters["adapters"].as_array().unwrap().len() >= 4);
     }
 }

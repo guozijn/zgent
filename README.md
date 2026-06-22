@@ -1,121 +1,86 @@
 # zgent
 
-`zgent` is a local-first coordinator for AI coding agents. It owns durable task
-state, normalized event logs, adapter detection, resource locks, workflows,
-skills, plugins, and audit trails while external agents own execution.
+Local-first coordinator for AI coding agents. **zgent** owns durable task state, event logs, locks, workflows, skills, and audit trails. External agents (Codex, Claude, Cursor, OpenCode, and others) own execution.
 
-The implementation is intentionally Rust-first and starts with the smallest
-useful local vertical slice from [goal.md](goal.md): bootstrap `~/.zgent`,
-detect installed coding agents, create SQLite state, register tasks, record
-events, and expose concise CLI commands.
+Built in Rust as a small, useful vertical slice: bootstrap local state, detect installed agents, register tasks, record events, and coordinate runs through a CLI or TUI.
 
-## Current Commands
+## Quickstart
+
+**1. Install and initialize**
 
 ```bash
-cargo run -- init
-cargo run -- --project init
-cargo run -- doctor
-cargo run -- agents detect
-cargo run -- agents list
-cargo run -- agents opencode-serve-plan --hostname 127.0.0.1 --port 4096
-cargo run -- agents opencode-openapi --url http://127.0.0.1:4096
-cargo run -- task create "fix the flaky auth test"
-cargo run -- task lease <task-id> --owner codex
-cargo run -- task heartbeat <node-id> --owner codex
-cargo run -- task run-next <task-id> --owner fake --adapter fake -- /bin/sh -c "echo ok"
-cargo run -- task run-all <task-id> --owner fake --adapter fake -- /bin/sh -c "echo ok"
-cargo run -- task run-provider-next <task-id> --adapter codex --owner codex --require-lock repo:/path -- "fix the task"
-cargo run -- task run-provider-all <task-id> --adapter claude --owner claude --require-lock repo:/path
-cargo run -- task resume-provider-next <task-id> --adapter codex --session-id <session-id> --require-lock repo:/path
-cargo run -- task resume-provider-all <task-id> --adapter opencode --session-id <session-id> --require-lock repo:/path
-cargo run -- task capture-patch <task-id> --repo .
-cargo run -- task verify <task-id> -- cargo test
-cargo run -- task complete <node-id>
-cargo run -- task fail <node-id>
-cargo run -- task retry <node-id>
-cargo run -- task cancel <task-id>
-cargo run -- task status <task-id>
-cargo run -- task events <task-id>
-cargo run -- run "review this repo for risky areas"
-cargo run -- workflow list
-cargo run -- workflow run fix-ci --log ci.log
-cargo run -- locks list
-cargo run -- locks acquire file:src/lib.rs --owner codex --task <task-id>
-cargo run -- locks release file:src/lib.rs --owner codex
-cargo run -- approvals request --task <task-id> --level dangerous --reason "needs install"
-cargo run -- approvals approve <approval-id>
-cargo run -- approvals deny <approval-id>
-cargo run -- approvals list
-cargo run -- plugins list
-cargo run -- plugins trust <plugin-id>
-cargo run -- plugins run-hook <plugin-id> hooks/pre-run.sh -- arg1 arg2
-cargo run -- skills list
-cargo run -- worktrees create <task-id> --agent codex --repo .
-cargo run -- workers register worker-1 --endpoint ssh://worker --capability codex
-cargo run -- workers list
-cargo run -- workers dispatch worker-1 <task-id>
-cargo run -- workers run-next worker-1 <task-id> --adapter fake -- /bin/sh -c "echo ok"
-cargo run -- workers run-all worker-1 <task-id> --adapter fake -- /bin/sh -c "echo ok"
-cargo run -- dashboard export --out /tmp/zgent-dashboard.html
-cargo run -- dashboard serve --addr 127.0.0.1:8765
-cargo run --bin zgentd -- once <task-id> --owner zgentd --adapter fake -- /bin/sh -c "echo ok"
-cargo run --bin zgentd -- serve --socket /tmp/zgentd.sock
-cargo run -- daemon health --socket /tmp/zgentd.sock
-cargo run -- daemon task-status <task-id> --socket /tmp/zgentd.sock
-cargo run -- daemon locks --socket /tmp/zgentd.sock
-cargo run -- export otel <task-id> --out /tmp/zgent-otel.json
-cargo run -- gateways list
-cargo run -- gateways a2a-card --base-url http://127.0.0.1:8766
-cargo run -- gateways a2a-serve --addr 127.0.0.1:8766
-cargo run -- gateways acp-stdio
-cargo run -- marketplace add-local ./path/to/plugin
-cargo run -- marketplace list
-cargo run -- marketplace install <plugin-id>
-cargo run -- collaboration start --mode hosted --endpoint https://example.invalid
-cargo run -- collaboration join <session-id> --participant reviewer
-cargo run -- collaboration list
+cargo install --path .
+zgent init
 ```
 
-Use `--home <path>` or `ZGENT_HOME` for tests and isolated experiments. Use
-`--project` to persist under the current repository's `.zgent/`. Without an
-override, `zgent` uses `~/.zgent`.
+Use `zgent --project init` to store state under the current repo's `.zgent/` instead of `~/.zgent`.
 
-## Bootstrap
+**2. Check your setup**
 
 ```bash
-cargo run -- --home /tmp/zgent-home init
-cargo run -- --project init
+zgent doctor
+zgent agents list
 ```
 
-`zgent init` creates:
+**3. Run a task**
 
-- `config.toml`
-- SQLite state at `state/zgent.sqlite`
-- append-only event log at `state/events.jsonl`
-- `agents/default.toml` for `zgent-core`
-- provider profiles for detected agents
-- `adapters/installed.json`
-- default skills: `plan`, `code-review`, `fix-ci`, `merge-review`
-- file-backed workflow template directory at `workflows/`
-- policy, task, plugin, worktree, and log directories
+```bash
+# One-shot prompt (uses detected adapters)
+zgent run "review this repo for risky areas"
 
-Bootstrap does not make model calls.
+# Or create a tracked task and run it with a provider
+zgent task create "fix the flaky auth test"
+zgent task run-provider-next <task-id> --adapter codex --owner codex -- "fix the task"
+zgent task status <task-id>
+```
 
-Project-local runtime state under `.zgent/state`, `.zgent/tasks`,
-`.zgent/worktrees`, and `.zgent/logs` is ignored by `.gitignore`. Declarative
-project files such as `.zgent/workflows`, `.zgent/skills`, `.zgent/policy`, and
-`.zgent/plugins` can be committed deliberately.
+**4. Use the TUI (optional)**
 
-Extension happens through provider adapters, plugins, skills, hooks, workflow
-templates, and gateway surfaces.
+Running `zgent` with no subcommand opens the interactive TUI, which talks to the local daemon over a Unix socket.
 
-See [docs/coordination.md](docs/coordination.md) for the local persistence,
-plugin, gateway, worker, and collaboration model.
+```bash
+zgent daemon serve   # in one terminal
+zgent                # in another
+```
 
-## Workflow Templates
+## What you get
 
-Built-in workflows are available by default. User and project templates can be
-added at `~/.zgent/workflows/<name>.toml` or `.zgent/workflows/<name>.toml`:
+After `zgent init`, your home (or project) directory includes:
+
+| Path | Purpose |
+|------|---------|
+| `config.toml` | Runtime configuration |
+| `state/zgent.sqlite` | Tasks, locks, sessions, approvals |
+| `state/events.jsonl` | Append-only event log |
+| `adapters/*.toml` | Provider adapter manifests |
+| `workflows/` | Workflow templates |
+| `skills/` | Built-in skills (`plan`, `code-review`, `fix-ci`, `merge-review`) |
+
+Bootstrap does not make model calls. Project-local runtime under `.zgent/state`, `.zgent/tasks`, `.zgent/worktrees`, and `.zgent/logs` is gitignored; declarative files like workflows, skills, and policy can be committed.
+
+## Core concepts
+
+**Tasks and workflows** — Create a task with a goal, lease nodes in a DAG, run agents against them, capture patches, verify, and complete or retry. Workflows chain nodes (planner → reviewer, etc.) from TOML templates in `workflows/`.
+
+**Adapters** — Detected coding agents are registered as provider adapters. zgent normalizes their output into a shared event stream. Custom adapters are plain TOML manifests with start/resume args and capabilities.
+
+**Locks and approvals** — Serialize access to repos or files with resource locks. Dangerous operations can require explicit approval before a run proceeds.
+
+**Plugins and skills** — Extend zgent with local plugins (`zgent.plugin.json`), trusted hooks, marketplace installs, and skill files.
+
+**Workers and gateways** — Dispatch tasks to remote workers, export OpenTelemetry traces, serve a dashboard, or expose A2A/ACP gateway surfaces for external integration.
+
+## Configuration
+
+| Flag / env | Effect |
+|------------|--------|
+| `--home <path>` or `ZGENT_HOME` | Override the zgent home directory (useful for tests) |
+| `--project` | Use `.zgent/` in the current repository |
+| `--permission-mode yolo` | Bypass local approval and lock gates for a single run |
+
+## Extending zgent
+
+**Workflow template** — Add `~/.zgent/workflows/<name>.toml` or `.zgent/workflows/<name>.toml`:
 
 ```toml
 [[nodes]]
@@ -130,40 +95,38 @@ depends_on = ["plan"]
 skill = "code-review"
 ```
 
-## opencode HTTP
+**Adapter manifest** — Add or edit `adapters/<provider>.toml`:
 
-`opencode serve` exposes a local HTTP server with an OpenAPI document at `/doc`.
-`zgent` can print the server command plan or fetch that document from a running
-server:
-
-```bash
-cargo run -- agents opencode-serve-plan --hostname 127.0.0.1 --port 4096
-cargo run -- agents opencode-openapi --url http://127.0.0.1:4096
+```toml
+id = "cursor"
+kind = "provider"
+command = "cursor-agent"
+start_args = ["-p", "{prompt}", "--output-format", "stream-json"]
+resume_args = ["--print", "--output-format", "stream-json", "--resume", "{session_id}", "{prompt}"]
+capabilities = ["detect", "start", "resume", "stream", "collect_result"]
+permission_modes = ["review-first", "yolo"]
+trusted = true
 ```
 
-## Plugins
+**Plugin manifest** — Declare skills, workflows, and hooks in `zgent.plugin.json`. User plugins under `~/.zgent/plugins/installed` are trusted by default; project plugins require `zgent plugins trust <plugin-id>`.
 
-Plugin manifests live in `zgent.plugin.json` and can declare local capabilities:
+## CLI reference
 
-```json
-{
-  "schema": "zgent.plugin.v1",
-  "id": "review@local",
-  "name": "Review",
-  "version": "0.1.0",
-  "capabilities": {
-    "adapters": [],
-    "skills": ["skills/review/SKILL.md"],
-    "workflows": ["workflows/review.toml"],
-    "hooks": ["hooks/pre-run.sh"]
-  }
-}
-```
+Run `zgent --help` or `zgent <command> --help` for the full command tree. Main areas:
 
-User plugins under `~/.zgent/plugins/installed` are trusted. Project plugins
-under `.zgent/plugins` require `zgent plugins trust <plugin-id>` before they are
-treated as trusted. Hooks only run when the plugin is trusted and the hook path
-is declared in the manifest.
+| Area | Examples |
+|------|----------|
+| Setup | `init`, `doctor`, `agents detect`, `agents list` |
+| Tasks | `task create`, `task run-provider-next`, `task status`, `task events`, `run` |
+| Workflows | `workflow list`, `workflow run fix-ci` |
+| Coordination | `locks acquire`, `approvals request`, `worktrees create` |
+| Ops | `daemon serve`, `dashboard serve`, `export otel` |
+| Extensions | `plugins list`, `skills list`, `marketplace install` |
+
+## Documentation
+
+- [docs/coordination.md](docs/coordination.md) — persistence, plugins, gateways, workers, and collaboration model
+- [goal.md](goal.md) — project goals and design direction
 
 ## Development
 
@@ -172,12 +135,4 @@ cargo fmt --all
 cargo test
 ```
 
-The test suite covers adapter specs and command plans, home initialization,
-SQLite task/event/lock/session/approval state, DAG leasing, fake subprocess
-execution, provider-style JSONL normalization, required-lock enforcement,
-workflow completion, task cancellation, event secret redaction, git patch
-capture, verification recording, file-backed workflow templates, persistent
-plugin trust, dangerous-command approval gates, node retry, worktree isolation,
-daemon request handling, and the CLI bootstrap/task/lock/approval/skill/export/gateway
-path. GitHub Actions run formatting, clippy, tests, crate packaging, and tagged
-binary releases.
+The test suite covers adapter specs, SQLite state, DAG leasing, lock enforcement, workflow completion, approval gates, daemon handling, and CLI paths. GitHub Actions run formatting, clippy, tests, packaging, and tagged binary releases.
